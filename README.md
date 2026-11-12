@@ -25,10 +25,24 @@ běží testovací režim s ukázkovými daty jen v prohlížeči).
 
 SharePoint → Dokumenty → `Inventura` → `Výsledky 2026`:
 
-- `00 Přehled inventury.xlsx` – všechny místnosti, stav lepení a inventury, a list „Co je jinak – vše“ s filtrem,
+- `00 Přehled inventury.xlsx` – všechny místnosti a stav lepení i inventury; list **Přesuny** (věci, které jsou fyzicky jinde, než uvádí evidence – stačí je převést) a list „Co je jinak – vše“ s filtrem,
 - `Místnosti/<místnost>.xlsx` – za každou místnost Souhrn, Co je jinak, Co sedí.
 
-Soubory se přepisují samy při každém „Poslat Marcelce“. K tomu jí přijde e-mail s Excelem v příloze a odkazem.
+**Excely se aktualizují samy**, i když učitel nebo lepič zapomene cokoli odeslat (data se ukládají průběžně
+a soubor místnosti se přepíše nejpozději do půl minuty, při uzavření místnosti hned). „Poslat Marcelce“ k tomu
+jen přidá e-mail s Excelem v příloze.
+
+## Věc z jiné třídy
+
+Když učitel načte štítek věci, která podle evidence patří jinam, vyskočí okno „Tahle věc sem nepatří“
+(číslo, kde má být, kde je teď). Ťukne „Zapsat – je tady“, případně připíše, kde přesně stojí. V původní
+třídě se věc pak neukáže jako chybějící, ale jako „Je v jiné místnosti“, a Marcelka ji má na listu Přesuny.
+
+## Test před nasazením
+
+[docs/test-ctecky.pdf](docs/test-ctecky.pdf) – scénář na 15 minut a čárové kódy k naskenování (z papíru i z monitoru).
+Ve testovacím režimu jsou skutečné štítky z rolky rozdělené takto: 9021217 a 9021216 → 1.A,
+9021215 a 9021214 → 6.A, 9021213 a 9021212 → 9.A, 9021211 → 9.B.
 
 ## Dokumentace
 

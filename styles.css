@@ -240,6 +240,10 @@ textarea { min-height: 84px; resize: vertical; }
 .single-actions { flex: 1 1 250px; display: flex; justify-content: flex-end; padding-left: 34px; }
 .single-actions .seg-item { flex: 1; }
 .mail-preview th { font-family: inherit; text-transform: none; letter-spacing: 0; color: inherit; font-size: inherit; }
+.foreign { display: grid; gap: 8px; margin: 6px 0 12px; }
+.foreign div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.foreign small { color: var(--muted); font-size: 14px; }
+.foreign b { text-align: right; overflow-wrap: anywhere; }
 .all-done { display: flex; gap: 14px; align-items: center; }
 .all-done p { margin: 0; }
 

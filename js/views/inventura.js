@@ -3,7 +3,7 @@
 // dohledám, odkliknu („Je tu“), označím „Chybí“, nebo „Bez štítku“ s poznámkou, kde věc stojí.
 // Věc z jiné místnosti se zapíše jako navíc i s tím, kam patří. Nakonec „Poslat Marcelce“.
 
-import { h, mount, mark, toast, ask, formDialog, fmt, uid } from '../ui.js';
+import { h, mount, mark, toast, ask, formDialog, modal, fmt, uid } from '../ui.js';
 import * as M from '../model.js';
 import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster, downloadRoom, sendResult, addNavicDialog } from './common.js';
 import { CameraScanner, cameraSupported, listenKeyboardScanner, feedback, fixKeyboard, prewarm, soundOn, setSound, unlockAudio } from '../scanner.js';
@@ -105,17 +105,17 @@ export async function render(el, ctx, { params }) {
       return;
     }
     if (it) {
-      // patří jinam
+      // věc z jiné místnosti → vyskočí okno, člověk ji označí a hospodářka ji v evidenci převede
       const exists = M.navicList(part()).find((n) => n.cislo === String(it.inv));
       if (exists) { feedback('again'); showLast('again', `Už zapsáno jako navíc – ${it.nazev}`, `patří do ${it.room}`); return; }
-      const id = uid();
-      await data.edit(key, ROLE, (p, stamp) => { p.navic[id] = { cislo: String(it.inv), nazev: it.nazev, odkud: it.room, pozn: '', ...stamp() }; });
       feedback('jinde');
-      showLast('jinde', `Navíc: ${it.nazev}`, `${it.inv} patří do ${it.room}`);
-      toast(`${it.nazev} patří do ${it.room} – zapsáno jako navíc`, {
-        action: 'Zpět', timeout: 6000,
-        onAction: () => data.edit(key, ROLE, (p, stamp) => { p.navic[id] = { ...p.navic[id], del: true, ...stamp() }; }),
-      });
+      showLast('jinde', `Sem nepatří: ${it.nazev}`, `${it.inv} – podle evidence ${it.room}`);
+      scanner?.pause();
+      const r = await foreignDialog(it);
+      scanner?.resume();
+      if (!r) { showLast('again', 'Nezapsáno', `${it.inv} ${it.nazev}`); return; }
+      await data.edit(key, ROLE, (p, stamp) => { p.navic[uid()] = { cislo: String(it.inv), nazev: it.nazev, odkud: it.room, pozn: r.pozn, ...stamp() }; });
+      showLast('jinde', `Zapsáno navíc: ${it.nazev}`, `${it.inv} – v evidenci se převede z ${it.room} sem`);
       return;
     }
     // neznámé číslo
@@ -125,6 +125,28 @@ export async function render(el, ctx, { params }) {
     const r = await addNavicDialog(data.index, key, { cislo: code });
     scanner?.resume();
     if (r) await data.edit(key, ROLE, (p, stamp) => { p.navic[uid()] = { ...r, ...stamp() }; });
+  }
+
+  function foreignDialog(it) {
+    return new Promise((resolve) => {
+      let out = null;
+      modal((close) => {
+        const ta = h('textarea', { rows: 2, placeholder: 'např. u okna, třetí lavice' });
+        return [
+          h('div', { class: 'eyebrow' }, 'Tahle věc sem nepatří'),
+          h('h2', { class: 'dlg-title' }, it.nazev),
+          h('div', { class: 'box fill foreign' },
+            h('div', null, h('small', null, 'Číslo'), h('b', { class: 'num' }, it.inv)),
+            h('div', null, h('small', null, 'Podle evidence je v'), h('b', null, it.room)),
+            h('div', null, h('small', null, 'Teď je tady'), h('b', null, room.name))),
+          h('p', { class: 'dlg-text' }, `Zapiš ji jako navíc. Hospodářka ji pak v evidenci převede sem a v ${it.room} se neukáže jako chybějící.`),
+          h('label', { class: 'field' }, h('span', null, 'Kde přesně stojí', h('em', null, ' (nepovinné)')), ta),
+          h('div', { class: 'btn-col' },
+            h('button', { class: 'btn primary', autofocus: true, onclick: () => { out = { pozn: ta.value.trim() }; close(); } }, 'Zapsat – je tady'),
+            h('button', { class: 'btn ghost', onclick: () => close() }, 'Nezapisovat (omyl)')),
+        ];
+      }, { onClose: () => resolve(out) });
+    });
   }
 
   // ruční zadání (a Bluetooth čtečka, když je kurzor v políčku)
@@ -220,6 +242,7 @@ export async function render(el, ctx, { params }) {
     return [
       it.pozn,
       l && l.s !== 'ok' ? `lepení: ${M.STAV_LEPIC[l.s].toLowerCase()}` : '',
+      found.get(String(it.inv)) ? `našlo se v ${found.get(String(it.inv)).room}` : '',
       cur?.pozn,
     ].filter(Boolean).join(' – ');
   }
@@ -261,7 +284,9 @@ export async function render(el, ctx, { params }) {
         h('div', { class: 'single-actions' }, itemActions(it, ro))));
   }
 
+  let found = data.foundElsewhere();
   function drawList() {
+    found = data.foundElsewhere();
     const c = M.counts(part(), items);
     const n = { zbyva: c.nic, hotovo: c.ok, jinak: c.chybi + c.bez, vse: c.total };
     mount(tabsEl, TABS.map((t) => h('button', {
@@ -316,7 +341,8 @@ export async function render(el, ctx, { params }) {
   async function finish() {
     let c = M.counts(part(), items);
     if (c.nic) {
-      const v = await ask(`Zbývá ${c.nic} ${fmt.plural(c.nic, 'věc', 'věci', 'věcí')}`, 'Nejsou načtené ani odkliknuté. Co s nimi?', [
+      const jinde = items.filter((it) => !M.itemState(part(), it.inv) && found.get(String(it.inv))).length;
+      const v = await ask(`Zbývá ${c.nic} ${fmt.plural(c.nic, 'věc', 'věci', 'věcí')}`, `Nejsou načtené ani odkliknuté. Co s nimi?${jinde ? ` (${jinde} z nich se našlo v jiné místnosti – tam to hospodářka uvidí jako přesun.)` : ''}`, [
         { label: 'Zpět, dohledám je', value: 'back', kind: 'primary' },
         { label: 'Označit jako chybí', value: 'chybi' },
       ]);
@@ -347,6 +373,7 @@ export async function render(el, ctx, { params }) {
   draw();
 
   const off = data.on(async (what, k) => {
+    if (what === 'stav') { drawList(); return; }
     if (what === 'room' && k === key) {
       doc = await data.room(key);
       drawHead(); drawList();
@@ -354,8 +381,8 @@ export async function render(el, ctx, { params }) {
       if (!(ae && ae.tagName === 'TEXTAREA')) drawRest();
     }
   });
-  const onVis = () => { if (document.hidden && scanner) stopScan(); };
+  const onVis = () => { if (document.hidden) { if (scanner) stopScan(); data.flush(key); } };
   document.addEventListener('visibilitychange', onVis);
   const t = setInterval(() => data.pullRoom(key), 20000);
-  return () => { off(); offKeys(); stopScan(); clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
+  return () => { off(); offKeys(); stopScan(); clearInterval(t); document.removeEventListener('visibilitychange', onVis); data.flush(key); };
 }

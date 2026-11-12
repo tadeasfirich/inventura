@@ -69,7 +69,7 @@ export async function render(el, ctx, { role }) {
       const done = cnt('hotovo');
       mount(footEl, h('section', { class: 'box fill end-box' },
         h('h4', null, 'Konec lepení'),
-        h('p', null, `Hotovo ${done} z ${rooms.length} místností. Až budeš mít hotovo, pošli výsledek ${ctx.prijemce}.`),
+        h('p', null, `Hotovo ${done} z ${rooms.length} místností. Excel na SharePointu se ukládá sám; tlačítkem pošleš ${ctx.prijemce} navíc e-mail.`),
         h('div', { class: 'btn-col' },
           h('button', {
             class: 'btn primary', disabled: !done || undefined,

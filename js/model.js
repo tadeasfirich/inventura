@@ -199,9 +199,12 @@ export function partStatus(part, items) {
   return 'none';
 }
 
-// Shrnutí místnosti pro přehled (ukládá se do stav.json)
+// Shrnutí místnosti pro přehled (ukládá se do stav.json).
+// cisla = inventární čísla věcí, které se tu našly navíc (kvůli přesunům mezi místnostmi).
 export function summarize(doc, items) {
-  const out = { room: doc.room, t: lastChange(doc) };
+  const cisla = new Set();
+  for (const role of ['lepic', 'ucitel']) for (const n of navicList(doc[role])) if (n.cislo) cisla.add(String(n.cislo));
+  const out = { room: doc.room, t: lastChange(doc), cisla: [...cisla] };
   for (const role of ['lepic', 'ucitel']) {
     const p = doc[role];
     const c = counts(p, items);
@@ -237,4 +240,33 @@ export function jakOvereno(f) {
   if (f.u?.s === 'ok') return f.u.jak === 'sken' ? 'Inventura – čtečkou' : 'Inventura – odkliknuto';
   if (f.l?.s === 'ok') return 'Nalepeno (inventura zatím ne)';
   return '';
+}
+
+// Kde se věc našla mimo svou místnost: Map(inv → { room, key, name, t })
+export function foundFromDocs(docs, index) {
+  const out = new Map();
+  for (const [key, doc] of docs) {
+    for (const role of ['ucitel', 'lepic']) {
+      for (const n of navicList(doc?.[role])) {
+        if (!n.cislo) continue;
+        const ev = index.lookup(n.cislo);
+        if (!ev || roomKey(ev.room) === key) continue;
+        const prev = out.get(String(ev.inv));
+        if (!prev || String(n.t) > String(prev.t)) out.set(String(ev.inv), { room: doc.room || key, key, name: n.name || '', t: n.t, pozn: n.pozn || '', role });
+      }
+    }
+  }
+  return out;
+}
+
+export function foundFromStav(stav, index) {
+  const out = new Map();
+  for (const [key, s] of Object.entries(stav || {})) {
+    for (const c of s?.cisla || []) {
+      const ev = index.lookup(c);
+      if (!ev || roomKey(ev.room) === key) continue;
+      out.set(String(ev.inv), { room: s.room || key, key, t: s.t });
+    }
+  }
+  return out;
 }

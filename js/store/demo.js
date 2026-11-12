@@ -12,11 +12,12 @@ export class DemoBackend {
     this.offline = false; // přepínač „Simulovat výpadek sítě“
   }
 
-  async init(seed) {
+  // seed se spustí napoprvé a pak vždy, když se změní verze ukázkových dat (odklikaný stav zůstává)
+  async init(seed, version = 1) {
     const has = await idb.get('demo', '_seeded');
-    if (!has && seed) {
+    if (has !== version && seed) {
       await seed(this);
-      await idb.put('demo', true, '_seeded');
+      await idb.put('demo', version, '_seeded');
     }
   }
 

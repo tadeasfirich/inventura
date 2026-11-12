@@ -3,11 +3,23 @@
 // Zásada: každé ťuknutí se nejdřív uloží do zařízení (IndexedDB), teprve potom odešle.
 // Aplikace tak funguje i bez wifi ve sklepě nebo v tělocvičně; jakmile je síť, samo se to dorovná.
 // Dva lidé v jedné místnosti si nepřepíšou práci: při odeslání se oba stavy sloučí věc po věci.
+//
+// Excely pro hospodářku se na SharePointu aktualizují samy (autoPublish), nezávisle na tlačítku
+// „Poslat Marcelce“. Když někdo zavře telefon dřív, než se jeho místnost stihla zapsat do Excelu,
+// dorovná to kterékoli jiné zařízení s aplikací (podle stav.json pozná, co je zastaralé).
 
 import { CONFIG } from '../config.js';
 import { idb } from './idb.js';
 import * as M from '../model.js';
 import * as R from '../report.js';
+
+// Novější shrnutí místnosti: rozhoduje čas poslední změny, při shodě to, které už je v Excelu.
+function betterSummary(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  if (String(a.t) !== String(b.t)) return String(a.t) > String(b.t) ? a : b;
+  return String(a.pub || '') >= String(b.pub || '') ? a : b;
+}
 
 export class Data {
   constructor(backend, user) {
@@ -26,6 +38,8 @@ export class Data {
     this.syncAgain = false;
     this.stavDirty = new Set();
     this.results = new Map();
+    this.pubAttempt = new Map();
+    this.ovCheck = 0;
   }
 
   // ---------- události pro obrazovky ----------
@@ -48,6 +62,7 @@ export class Data {
       roomsDir: `_data/${k}/mistnosti`,
       room: (key) => `_data/${k}/mistnosti/${key}.json`,
       stav: `_data/${k}/stav.json`,
+      prehled: `_data/${k}/prehled.json`,
       results: `Výsledky ${k}`,
       roomXlsx: (key) => `Výsledky ${k}/Místnosti/${key}.xlsx`,
       overview: `Výsledky ${k}/00 Přehled inventury.xlsx`,
@@ -110,7 +125,8 @@ export class Data {
     let changed = false;
     for (const [k, v] of Object.entries(remote)) {
       const cur = this.stav[k];
-      if (!cur || String(v.t) > String(cur.t)) { this.stav[k] = v; changed = true; }
+      if (this.stavDirty.has(k)) continue; // moje neodeslaná změna má přednost, sloučí se v pushStav
+      if (betterSummary(cur, v) !== cur) { this.stav[k] = v; changed = true; }
     }
     if (changed) { await idb.put('kv', this.stav, `stav|${this.kolo}`); this.emit('stav'); }
   }
@@ -168,7 +184,7 @@ export class Data {
       fn(rec.doc[role], () => this.stamp(), rec.doc);
       rec.rev++;
       await this.saveRec(key, rec);
-      this.stav[key] = M.summarize(rec.doc, this.roomItems(key));
+      this.stav[key] = { ...M.summarize(rec.doc, this.roomItems(key)), pub: this.stav[key]?.pub || '' };
       this.stavDirty.add(key);
       await idb.put('kv', this.stav, `stav|${this.kolo}`);
       await idb.put('kv', [...this.stavDirty], `stavDirty|${this.kolo}`);
@@ -218,6 +234,7 @@ export class Data {
         }
         if (this.stavDirty.size) await this.pushStav();
         await this.processOutbox();
+        await this.autoPublish();
         this.status.offline = false;
         this.status.error = null;
         this.status.lastSync = new Date().toISOString();
@@ -269,13 +286,11 @@ export class Data {
       const remote = await this.be.getJson(this.paths.stav);
       const data = remote?.data || { rooms: {} };
       for (const k of keys) {
-        const mine = this.stav[k];
-        const theirs = data.rooms[k];
-        if (mine && (!theirs || String(mine.t) >= String(theirs.t))) data.rooms[k] = mine;
-        else if (theirs) this.stav[k] = theirs;
+        const best = betterSummary(data.rooms[k], this.stav[k]);
+        if (best) { data.rooms[k] = best; this.stav[k] = best; }
       }
       for (const [k, v] of Object.entries(data.rooms)) {
-        if (!this.stav[k] || String(v.t) > String(this.stav[k].t)) this.stav[k] = v;
+        if (!keys.includes(k)) this.stav[k] = betterSummary(this.stav[k], v);
       }
       try {
         await this.be.putJson(this.paths.stav, data, remote?.etag || null);
@@ -288,6 +303,75 @@ export class Data {
         if (e.status !== 412 && e.status !== 409) throw e;
       }
     }
+  }
+
+  // Odchod z místnosti nebo zavření aplikace: zapsat Excel hned, nečekat na 20 s
+  flush(key) {
+    if (key) this.pubAttempt.delete(key);
+    this.kick(0);
+  }
+
+  // Věci, které někdo našel v jiné místnosti, než uvádí evidence: Map(inv → { room })
+  foundElsewhere() { return M.foundFromStav(this.stav, this.index); }
+
+  // ---------- Excely na SharePointu se aktualizují samy ----------
+  async autoPublish() {
+    if (!this.index.rooms.length) return;
+    await this.pullStav();
+    const now = Date.now();
+    const stale = Object.entries(this.stav).filter(([k, st]) => st && st.t && this.index.roomMap.has(k) && (!st.pub || String(st.t) > String(st.pub)));
+    let published = 0;
+    for (const [key, st] of stale.slice(0, 8)) {
+      // uzavření místnosti se zapíše hned, jinak nejvýš jednou za 20 s (ať se neposílá každé pípnutí)
+      const closed = [st.ucitel?.kdy, st.lepic?.kdy, st.ucitel?.odeslano].some((x) => x && String(x) > String(st.pub || ''));
+      if (!closed && now - (this.pubAttempt.get(key) || 0) < 20000) continue;
+      this.pubAttempt.set(key, now);
+      const remote = await this.be.getJson(this.paths.room(key));
+      const rec = await this.getRec(key);
+      const doc = M.mergeRoom(remote?.data, rec.doc);
+      const last = M.lastChange(doc);
+      if (!last) continue;
+      const { blob } = R.roomWorkbook(doc, this.roomItems(key), this.index, this.kolo, this.foundElsewhere());
+      await this.be.putFile(this.paths.roomXlsx(key), blob);
+      this.stav[key] = { ...M.summarize(doc, this.roomItems(key)), pub: last };
+      this.stavDirty.add(key);
+      published++;
+    }
+    if (published) {
+      await idb.put('kv', this.stav, `stav|${this.kolo}`);
+      await idb.put('kv', [...this.stavDirty], `stavDirty|${this.kolo}`);
+      await this.pushStav();
+    }
+    await this.maybeOverview();
+  }
+
+  // Přehled všech místností: při uzavření místnosti hned, jinak nejvýš jednou za 3 minuty
+  async maybeOverview() {
+    const now = Date.now();
+    const vals = Object.values(this.stav).filter(Boolean);
+    const maxT = vals.reduce((m, st) => (String(st.t) > m ? String(st.t) : m), '');
+    if (!maxT) return;
+    if (now - this.ovCheck < 30000) return;
+    this.ovCheck = now;
+    const meta = await this.be.getJson(this.paths.prehled);
+    const upTo = meta?.data?.upTo || '';
+    if (upTo && maxT <= upTo) return;
+    const closed = vals.some((st) => [st.ucitel?.kdy, st.lepic?.kdy, st.ucitel?.odeslano].some((x) => x && String(x) > upTo));
+    const at = meta?.data?.at ? Date.parse(meta.data.at) : 0;
+    if (!closed && now - at < 3 * 60000) return;
+    const docs = await this.allDocs();
+    await this.writeOverview(docs, maxT, meta?.etag || null);
+  }
+
+  async writeOverview(docs, upTo, etag) {
+    const blob = R.overviewWorkbook(this.index, docs, this.kolo);
+    await this.be.putFile(this.paths.overview, blob);
+    if (!upTo) upTo = [...docs.values()].reduce((m, d) => { const t = M.lastChange(d); return t > m ? t : m; }, '');
+    try {
+      if (etag === undefined) etag = (await this.be.getJson(this.paths.prehled))?.etag || null;
+      await this.be.putJson(this.paths.prehled, { at: new Date().toISOString(), upTo }, etag, { overwrite: !etag });
+    } catch { /* jiné zařízení zapsalo souběžně – nevadí */ }
+    return blob;
   }
 
   // ---------- všechny místnosti (pro přehled a Excel) ----------
@@ -339,16 +423,17 @@ export class Data {
     for (const key of rooms) { const d = docs.get(key); if (d) d[a.role].odeslano = sentStamp; }
 
     // Excely na SharePoint
+    const found = M.foundFromDocs(docs, this.index);
     let fileUrl = null;
     let analysis = null;
+    let roomBlob = null;
     for (const key of rooms) {
       const doc = docs.get(key) || M.emptyRoom(this.roomName(key));
-      const { blob, analysis: an } = R.roomWorkbook(doc, this.roomItems(key), this.index, this.kolo);
+      const { blob, analysis: an } = R.roomWorkbook(doc, this.roomItems(key), this.index, this.kolo, found);
       const up = await this.be.putFile(P.roomXlsx(key), blob);
-      if (a.role === 'ucitel') { fileUrl = up.webUrl; analysis = an; }
+      if (a.role === 'ucitel') { fileUrl = up.webUrl; analysis = an; roomBlob = blob; }
     }
-    const overview = R.overviewWorkbook(this.index, docs, this.kolo);
-    await this.be.putFile(P.overview, overview);
+    const overview = await this.writeOverview(docs);
     let folderUrl = null;
     try { folderUrl = await this.be.folderUrl(P.results); } catch { /* odkaz není nutný */ }
 
@@ -361,7 +446,7 @@ export class Data {
           const key = rooms[0];
           const doc = docs.get(key);
           msg = R.roomMail({ doc, analysis, user, folderUrl, fileUrl, kolo: this.kolo });
-          attachments = [{ name: `${key}.xlsx`, blob: R.roomWorkbook(doc, this.roomItems(key), this.index, this.kolo).blob }];
+          attachments = [{ name: `${key}.xlsx`, blob: roomBlob }];
         } else {
           msg = R.lepeniMail({ index: this.index, docs, user, folderUrl, kolo: this.kolo });
           attachments = [{ name: '00 Přehled inventury.xlsx', blob: overview }];
@@ -386,15 +471,20 @@ export class Data {
     await this.syncNow();
     if (this.status.offline) { const e = new Error('Bez připojení k internetu'); e.offline = true; throw e; }
     const docs = await this.allDocs();
+    const found = M.foundFromDocs(docs, this.index);
     const keys = this.index.rooms.filter((r) => docs.get(r.key) && M.lastChange(docs.get(r.key))).map((r) => r.key);
     let i = 0;
     for (const key of keys) {
       onProgress(++i, keys.length + 1);
-      const { blob } = R.roomWorkbook(docs.get(key), this.roomItems(key), this.index, this.kolo);
+      const doc = docs.get(key);
+      const { blob } = R.roomWorkbook(doc, this.roomItems(key), this.index, this.kolo, found);
       await this.be.putFile(this.paths.roomXlsx(key), blob);
+      this.stav[key] = { ...M.summarize(doc, this.roomItems(key)), pub: M.lastChange(doc) };
+      this.stavDirty.add(key);
     }
     onProgress(keys.length + 1, keys.length + 1);
-    await this.be.putFile(this.paths.overview, R.overviewWorkbook(this.index, docs, this.kolo));
+    await this.writeOverview(docs);
+    await this.pushStav();
     let folderUrl = null;
     try { folderUrl = await this.be.folderUrl(this.paths.results); } catch { /* nic */ }
     return { rooms: keys.length, folderUrl };
@@ -407,7 +497,7 @@ export class Data {
   // ---------- Excel ke stažení (funguje i bez sítě z toho, co je v zařízení) ----------
   async roomXlsx(key) {
     const doc = await this.room(key);
-    return R.roomWorkbook(doc, this.roomItems(key), this.index, this.kolo).blob;
+    return R.roomWorkbook(doc, this.roomItems(key), this.index, this.kolo, this.foundElsewhere()).blob;
   }
   async overviewXlsx() {
     let docs;

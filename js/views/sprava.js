@@ -95,7 +95,7 @@ function prehled(el, ctx) {
     }, 'Otevřít složku na SharePointu'));
 
   const search = h('input', { type: 'search', class: 'search', placeholder: 'Hledej místnost', oninput: (e) => { q.text = e.target.value; draw(); } });
-  mount(el, kpiEl, actionsEl, h('div', { class: 'search-wrap' }, search), tableEl);
+  mount(el, kpiEl, actionsEl, h('p', { class: 'small muted' }, 'Excely pro hospodářku se na SharePointu aktualizují samy, i když nikdo nic neodešle. Tlačítko je jen pro jistotu.'), h('div', { class: 'search-wrap' }, search), tableEl);
   draw();
   const off = data.on((w) => { if (['stav', 'master'].includes(w)) draw(); });
   data.pullStav().catch(() => {});

@@ -6,7 +6,7 @@ import * as auth from './auth.js';
 import { Data } from './store/data.js';
 import { DemoBackend } from './store/demo.js';
 import { SharePointBackend } from './store/sharepoint.js';
-import { DEMO_MASTER } from './demo-data.js';
+import { DEMO_MASTER, DEMO_VERSION } from './demo-data.js';
 
 const root = document.getElementById('app');
 const demo = isDemo();
@@ -52,7 +52,7 @@ async function boot() {
     ctx.be = new DemoBackend();
     await ctx.be.init(async (be) => {
       await be.putJson(`_data/${CONFIG.defaults.kolo}/majetek.json`, { ...DEMO_MASTER, kolo: CONFIG.defaults.kolo }, null, { overwrite: true });
-    });
+    }, DEMO_VERSION);
   } else {
     let account = null;
     try { account = await auth.msInit(); } catch (e) { console.error(e); }

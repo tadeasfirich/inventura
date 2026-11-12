@@ -28,7 +28,11 @@ nahoře jde zapnout **Simulovat výpadek sítě**.
 V ostrém provozu jde testovací režim kdykoli otevřít adresou s `?demo=1` (třeba na poradě), aniž by se
 cokoli dotklo skutečných dat.
 
-✔ Na telefonu jsi nalepil(a) místnost, udělal(a) v ní inventuru a ve „Složce (test)“ vidíš Excel a e-mail.
+**Test čtečky před nasazením:** vytiskni `docs/test-ctecky.pdf` (nebo ho otevři na monitoru) a projdi pět kroků.
+Ověříš skutečné štítky z rolky (9021211–9021217 jsou v testovacích datech rozdělené do 1.A, 6.A, 9.A a 9.B),
+chybějící věc v Excelu i e-mailu, okno pro věc z jiné třídy a to, že se Excel uloží, i když nikdo nic neodešle.
+
+✔ Všech pět kroků v PDF dopadlo, jak je tam napsané.
 
 ## 2. Zapni GitHub Pages
 
@@ -145,7 +149,8 @@ Doporuč jí **Přidat zástupce do Mého OneDrivu** – pak ji má v Průzkumn�
 - `Místnosti/…xlsx` – detail jedné místnosti.
 - E-mail „Inventura 2026 – 1.A … – hotovo“ s Excelem v příloze přijde, kdykoli učitel místnost odešle.
 
-Excely se přepisují samy. Kdyby chtěla mít vše čerstvé najednou: Správa → **Aktualizovat Excely pro hospodářku**.
+Excely se aktualizují samy, i když učitel nebo lepič zapomene cokoli odeslat. List **Přesuny** v přehledu jsou věci,
+které stačí v evidenci převést do jiné místnosti. Kdyby chtěla mít vše čerstvé najednou: Správa → **Aktualizovat Excely pro hospodářku**.
 
 ## 9. Čtečky a telefony
 

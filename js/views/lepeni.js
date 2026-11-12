@@ -154,5 +154,7 @@ export async function render(el, ctx, { params }) {
     }
   });
   const t = setInterval(() => data.pullRoom(key), 20000);
-  return () => { off(); clearInterval(t); };
+  const onVis = () => { if (document.hidden) data.flush(key); };
+  document.addEventListener('visibilitychange', onVis);
+  return () => { off(); clearInterval(t); document.removeEventListener('visibilitychange', onVis); data.flush(key); };
 }
