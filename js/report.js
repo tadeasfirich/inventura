@@ -21,9 +21,10 @@ export function analyzeRoom(doc, items, index, found = new Map()) {
   const jinak = [];
   const sedi = [];
   const anyDone = doc.lepic?.hotovo?.v || doc.ucitel?.hotovo?.v;
-  const c = { total: items.length, sedi: 0, chybi: 0, bez: 0, navic: 0, nic: 0, presun: 0 };
+  const c = { total: items.length, sedi: 0, chybi: 0, bez: 0, navic: 0, nic: 0, presun: 0, vyrazeno: 0 };
   for (const it of items) {
-    const f = M.finalState(doc, it.inv);
+    const f = M.finalState(doc, it.inv, it);
+    const kind = M.itemKind(it);
     const jinde = found.get(String(it.inv));
     if (jinde && jinde.room !== doc.room && f.s !== 'ok' && f.s !== 'bez') {
       // tady chybí, ale našla se jinde → není ztracená, jen přestěhovaná
@@ -31,7 +32,12 @@ export function analyzeRoom(doc, items, index, found = new Map()) {
       jinak.push({ co: `Je v jiné místnosti – ${jinde.room}`, s: 'presun', inv: it.inv, nazev: it.nazev, kde: `Převést do ${jinde.room}`, zdroj: jinde.name ? `Inventura – ${jinde.name}` : '', it });
     } else if (f.s === 'ok') {
       c.sedi++;
-      sedi.push({ it, jak: M.jakOvereno(f) });
+      sedi.push({ it, jak: M.jakOvereno(f, it) });
+    } else if (f.s === 'chybi' && kind === 'vyradit') {
+      // věc s poznámkou V / Vyřadit tu už nemusí být – není to ztráta, jen podklad k odepsání
+      c.vyrazeno++;
+      const who = (f.u || f.l);
+      jinak.push({ co: 'K vyřazení – už tu není', s: 'vyrazeno', inv: it.inv, nazev: it.nazev, kde: f.pozn || `Poznámka v evidenci: ${it.pozn}`, zdroj: `${f.zdroj}${who?.name ? ` – ${who.name}` : ''}`, it });
     } else if (f.s === 'chybi' || f.s === 'bez') {
       c[f.s]++;
       const who = (f.u || f.l);
@@ -59,7 +65,7 @@ export function analyzeRoom(doc, items, index, found = new Map()) {
       });
     }
   }
-  const order = { chybi: 0, bez: 1, navic: 2, presun: 3, nic: 4 };
+  const order = { chybi: 0, bez: 1, navic: 2, presun: 3, vyrazeno: 4, nic: 5 };
   jinak.sort((a, b) => order[a.s] - order[b.s] || M.cmp(a.nazev, b.nazev) || M.cmp(a.inv, b.inv));
   sedi.sort((a, b) => M.cmp(a.it.nazev, b.it.nazev) || M.cmp(a.it.inv, b.it.inv));
   return { c, jinak, sedi };
@@ -74,7 +80,7 @@ function partText(p, items) {
 
 const JINAK_HEAD = ['Co je jinak', 'Inv. číslo', 'Název', 'Kde je / poznámka', 'Zjistil(a)', 'Skupina', 'Evid. číslo', 'Pořiz. cena'];
 const JINAK_W = [34, 13, 38, 42, 30, 9, 14, 14];
-const jinakRow = (j) => [j.co, num(j.inv), j.nazev, j.kde, j.zdroj, j.it?.skupina || '', j.it?.evid || '', money(j.it?.cena)];
+const jinakRow = (j) => [j.co, num(j.inv), j.nazev, j.kde, j.zdroj, j.it?.skupina || '', num(j.it?.evid || ''), money(j.it?.cena)];
 const head = (arr) => arr.map((v) => ({ v, s: S.head }));
 
 export function roomWorkbook(doc, items, index, kolo, found) {
@@ -90,6 +96,7 @@ export function roomWorkbook(doc, items, index, kolo, found) {
     ['Je tu, chybí štítek', a.c.bez],
     ['Navíc (není v seznamu třídy)', a.c.navic],
     ['Našlo se v jiné místnosti', a.c.presun],
+    ['K vyřazení – už tu není', a.c.vyrazeno],
     ['Neověřeno', a.c.nic],
     [{ v: 'Celkem podle evidence', s: S.bold }, { v: a.c.total, s: S.bold }],
     [],
@@ -107,7 +114,7 @@ export function roomWorkbook(doc, items, index, kolo, found) {
     {
       name: 'Co sedí', widths: [13, 40, 28, 9, 14, 14], headerRow: 0,
       rows: [head(['Inv. číslo', 'Název', 'Jak ověřeno', 'Skupina', 'Evid. číslo', 'Pořiz. cena']),
-        ...a.sedi.map((s) => [num(s.it.inv), s.it.nazev, s.jak, s.it.skupina || '', s.it.evid || '', money(s.it.cena)])],
+        ...a.sedi.map((s) => [num(s.it.inv), s.it.nazev, s.jak, s.it.skupina || '', num(s.it.evid || ''), money(s.it.cena)])],
     },
   ]);
   return { blob, analysis: a };
@@ -121,7 +128,7 @@ export function overviewWorkbook(index, docs, kolo) {
   const found = M.foundFromDocs(docs, index);
   const rows = [];
   const all = [];
-  const tot = { total: 0, sedi: 0, chybi: 0, bez: 0, navic: 0, nic: 0, presun: 0, lepHot: 0, invHot: 0 };
+  const tot = { total: 0, sedi: 0, chybi: 0, bez: 0, navic: 0, nic: 0, presun: 0, vyrazeno: 0, lepHot: 0, invHot: 0 };
   for (const r of index.rooms) {
     const doc = docs.get(r.key) || M.emptyRoom(r.name);
     const a = analyzeRoom(doc, r.items, index, found);
@@ -129,13 +136,13 @@ export function overviewWorkbook(index, docs, kolo) {
     const us = M.partStatus(doc.ucitel, r.items);
     if (ls === 'hotovo') tot.lepHot++;
     if (us === 'hotovo') tot.invHot++;
-    for (const k of ['total', 'sedi', 'chybi', 'bez', 'navic', 'nic', 'presun']) tot[k] += a.c[k];
+    for (const k of ['total', 'sedi', 'chybi', 'bez', 'navic', 'nic', 'presun', 'vyrazeno']) tot[k] += a.c[k];
     rows.push([
       r.name, a.c.total,
       STAV_TXT[ls], ls === 'hotovo' ? doc.lepic.hotovo.name || '' : '',
       STAV_TXT[us], us === 'hotovo' ? doc.ucitel.hotovo.name || '' : '',
       doc.ucitel?.odeslano?.t ? fmt.dt(doc.ucitel.odeslano.t) : (us === 'hotovo' ? 'neodesláno (Excel je tu)' : ''),
-      a.c.sedi, a.c.chybi, a.c.bez, a.c.navic, a.c.presun, a.c.nic,
+      a.c.sedi, a.c.chybi, a.c.bez, a.c.navic, a.c.presun, a.c.vyrazeno, a.c.nic,
     ]);
     // přesuny jsou na vlastním listu, ať tu nejsou dvakrát
     for (const j of a.jinak) if (j.s !== 'presun') all.push([r.name, ...jinakRow(j)]);
@@ -144,17 +151,17 @@ export function overviewWorkbook(index, docs, kolo) {
   // Přesuny: věc je v evidenci jinde, než kde se našla → hospodářka ji převede
   const presuny = [...found.entries()].map(([inv, f]) => {
     const it = index.byInv.get(inv);
-    return [num(inv), it?.nazev || '', it?.room || '', f.room, f.pozn || '', f.name || '', f.t ? fmt.dt(f.t) : '', it?.skupina || '', it?.evid || '', money(it?.cena)];
+    return [num(inv), it?.nazev || '', it?.room || '', f.room, f.pozn || '', f.name || '', f.t ? fmt.dt(f.t) : '', it?.skupina || '', num(it?.evid || ''), money(it?.cena)];
   }).sort((x, y) => M.cmp(x[2], y[2]) || M.cmp(x[1], y[1]));
 
   const mistnosti = [
     [{ v: `Inventura ${kolo} – přehled místností`, s: S.title }],
     [{ v: `${CONFIG.schoolName}. Aktualizováno ${fmt.dt(now)}. Lepení hotovo ${tot.lepHot} z ${index.rooms.length}, inventura hotovo ${tot.invHot} z ${index.rooms.length}, přesunů ${presuny.length}.`, s: S.muted }],
     [],
-    head(['Místnost', 'Položek', 'Lepení', 'Lepil(a)', 'Inventura', 'Provedl(a)', 'Odesláno', 'Sedí', 'Chybí', 'Bez štítku', 'Navíc', 'Je jinde', 'Neověřeno']),
+    head(['Místnost', 'Položek', 'Lepení', 'Lepil(a)', 'Inventura', 'Provedl(a)', 'Odesláno', 'Sedí', 'Chybí', 'Bez štítku', 'Navíc', 'Je jinde', 'Vyřazeno', 'Neověřeno']),
     ...rows,
     [{ v: 'Celkem', s: S.bold }, { v: tot.total, s: S.bold }, '', '', '', '', '',
-      { v: tot.sedi, s: S.bold }, { v: tot.chybi, s: S.bold }, { v: tot.bez, s: S.bold }, { v: tot.navic, s: S.bold }, { v: tot.presun, s: S.bold }, { v: tot.nic, s: S.bold }],
+      { v: tot.sedi, s: S.bold }, { v: tot.chybi, s: S.bold }, { v: tot.bez, s: S.bold }, { v: tot.navic, s: S.bold }, { v: tot.presun, s: S.bold }, { v: tot.vyrazeno, s: S.bold }, { v: tot.nic, s: S.bold }],
   ];
   const navod = [
     [{ v: 'Jak s tím pracovat', s: S.title }],
@@ -171,10 +178,11 @@ export function overviewWorkbook(index, docs, kolo) {
     ['Navíc – patří do …', 'Věc je v evidenci jinde, našla se tady. Je i na listu „Přesuny“.'],
     ['Je v jiné místnosti', 'Tady chybí, ale našla se jinde. Není ztracená, jen se přestěhovala.'],
     ['Navíc – není v evidenci', 'Věc ve třídě je, ale v evidenci ji nemáme.'],
+    ['K vyřazení – už tu není', 'Věc měla v evidenci poznámku V / Vyřadit a ve třídě už není. Podklad k odepsání.'],
     ['Neověřeno', 'Místnost je uzavřená, ale u věci nikdo nevyplnil stav.'],
   ].map((r, i) => (i === 8 ? head(r) : r.map((v, j) => (j === 1 ? { v, s: S.wrap } : v))));
   return writeWorkbook([
-    { name: 'Místnosti', widths: [28, 9, 13, 22, 13, 22, 20, 8, 8, 10, 8, 9, 11], headerRow: 3, rows: mistnosti },
+    { name: 'Místnosti', widths: [28, 9, 13, 22, 13, 22, 20, 8, 8, 10, 8, 9, 10, 11], headerRow: 3, rows: mistnosti },
     {
       name: 'Přesuny', widths: [13, 36, 24, 24, 30, 22, 16, 9, 14, 14], headerRow: 0,
       rows: [head(['Inv. číslo', 'Název', 'Podle evidence v', 'Skutečně je v', 'Kde přesně / poznámka', 'Zjistil(a)', 'Kdy', 'Skupina', 'Evid. číslo', 'Pořiz. cena']), ...presuny],
@@ -204,7 +212,7 @@ export function roomMail({ doc, analysis, user, folderUrl, fileUrl, kolo }) {
   const a = analysis;
   const rows = a.jinak.slice(0, 80).map((j) => `<tr><td ${TD}>${e(j.co)}</td><td ${TD}>${e(j.inv)}</td><td ${TD}>${e(j.nazev)}</td><td ${TD}>${e(j.kde)}</td></tr>`).join('');
   const inner = `<p>Dobrý den,<br>inventura místnosti <b>${e(doc.room)}</b> je hotová. Provedl(a) ${e(user.name)}, ${fmt.dt(new Date())}.</p>
-<p><b>Sedí ${a.c.sedi}</b> z ${a.c.total}; chybí ${a.c.chybi}; bez štítku ${a.c.bez}; navíc ${a.c.navic}${a.c.presun ? `; je v jiné místnosti ${a.c.presun}` : ''}${a.c.nic ? `; neověřeno ${a.c.nic}` : ''}.</p>
+<p><b>Sedí ${a.c.sedi}</b> z ${a.c.total}; chybí ${a.c.chybi}; bez štítku ${a.c.bez}; navíc ${a.c.navic}${a.c.presun ? `; je v jiné místnosti ${a.c.presun}` : ''}${a.c.vyrazeno ? `; k vyřazení už tu není ${a.c.vyrazeno}` : ''}${a.c.nic ? `; neověřeno ${a.c.nic}` : ''}.</p>
 ${a.jinak.length ? `<table style="border-collapse:collapse;font-size:14px"><tr><th ${TH}>Co je jinak</th><th ${TH}>Inv. číslo</th><th ${TH}>Název</th><th ${TH}>Kde je / poznámka</th></tr>${rows}</table>
 ${a.jinak.length > 80 ? `<p>… a dalších ${a.jinak.length - 80} řádků v příloze.</p>` : ''}` : '<p>Všechno sedí, žádné rozdíly.</p>'}`;
   return {

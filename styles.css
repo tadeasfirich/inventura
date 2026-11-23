@@ -237,6 +237,7 @@ textarea { min-height: 84px; resize: vertical; }
 .state.st-chybi, .state.st-bez { border-color: var(--ink); background: var(--ink); color: #fff; }
 .edit-ico { width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin: -4px 2px 0; }
 .group.single .group-main { flex-wrap: wrap; padding-bottom: 12px; }
+.group.single .group-main > .grow { flex: 1 1 calc(100% - 40px); }
 .single-actions { flex: 1 1 250px; display: flex; justify-content: flex-end; padding-left: 34px; }
 .single-actions .seg-item { flex: 1; }
 .mail-preview th { font-family: inherit; text-transform: none; letter-spacing: 0; color: inherit; font-size: inherit; }
@@ -349,3 +350,15 @@ tr.click:hover td { background: var(--fill); }
 @media (min-width: 860px) {
   .scan-panel { margin: 14px 0 0; }
 }
+
+/* ---------- evidenční číslo a věci bez štítku ---------- */
+.item-id .evid { font-size: 13px; color: var(--muted); line-height: 1.2; }
+.ids { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.special-list .item { gap: 10px; }
+.special-list .item-id { flex: 1 1 160px; }
+.item-title { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.kind { display: inline-block; font-family: var(--mono); font-weight: 400; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  border: 1px solid var(--ink); padding: 0 5px; vertical-align: 2px; white-space: nowrap; }
+.kind-vyradit { border-style: dashed; }
+.seg-2 { flex: 2 1 180px; }
+.section.special .items { padding: 0; }

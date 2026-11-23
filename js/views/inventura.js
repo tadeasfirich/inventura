@@ -5,7 +5,7 @@
 
 import { h, mount, mark, toast, ask, formDialog, modal, fmt, uid } from '../ui.js';
 import * as M from '../model.js';
-import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster, downloadRoom, sendResult, addNavicDialog } from './common.js';
+import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster, downloadRoom, sendResult, addNavicDialog, invBlock, specialSection } from './common.js';
 import { CameraScanner, cameraSupported, listenKeyboardScanner, feedback, fixKeyboard, prewarm, soundOn, setSound, unlockAudio } from '../scanner.js';
 
 const ROLE = 'ucitel';
@@ -165,7 +165,9 @@ export async function render(el, ctx, { params }) {
   const headEl = h('div');
   const tabsEl = h('div', { class: 'seg tabs', role: 'tablist' });
   const listEl = h('div', { class: 'groups' });
+  const specialEl = h('div');
   const restEl = h('div');
+  const normal = items.filter((it) => !M.isSpecial(it));
 
   function setItem(inv, s, extra = {}) {
     return data.edit(key, ROLE, (p, stamp) => { p.items[inv] = { s, jak: s === 'ok' ? 'ruka' : undefined, ...extra, ...stamp() }; });
@@ -265,8 +267,7 @@ export async function render(el, ctx, { params }) {
     const hint = itemHint(it);
     return h('li', { class: `item ${cur ? 'is-' + cur.s : ''}` },
       h('div', { class: 'item-id' },
-        h('b', { class: 'num' }, it.inv),
-        hint ? h('small', { class: 'muted' }, hint) : null),
+        invBlock(it, hint ? h('small', { class: 'muted' }, hint) : null)),
       itemActions(it, ro));
   }
 
@@ -280,7 +281,7 @@ export async function render(el, ctx, { params }) {
         mark(shape, 'lg'),
         h('div', { class: 'grow' },
           h('h3', null, it.nazev),
-          h('div', { class: 'meta' }, h('span', { class: 'count num' }, it.inv), hint ? h('span', null, hint) : null)),
+          h('div', { class: 'meta' }, h('span', { class: 'count num' }, it.inv), it.evid ? h('span', { class: 'num' }, `(${it.evid})`) : null, hint ? h('span', null, hint) : null)),
         h('div', { class: 'single-actions' }, itemActions(it, ro))));
   }
 
@@ -293,9 +294,13 @@ export async function render(el, ctx, { params }) {
       role: 'tab', 'aria-selected': String(tab === t.id), 'aria-pressed': String(tab === t.id),
       onclick: () => { tab = t.id; drawList(); },
     }, t.label, h('span', { class: 'cnt' }, n[t.id]))));
-    const cards = M.groupItems(items).map(groupCard).filter(Boolean);
+    const cards = M.groupItems(normal).map(groupCard).filter(Boolean);
+    mount(specialEl, specialSection(ctx, key, ROLE, part(), items, { readOnly: readOnly() }));
     let empty = null;
-    if (!cards.length) {
+    const specialLeft = items.filter((it) => M.isSpecial(it) && !M.itemState(part(), it.inv)).length;
+    if (!cards.length && tab === 'zbyva' && specialLeft) {
+      empty = h('p', { class: 'hint' }, `Se štítkem je hotovo. Odklikni ještě ${specialLeft} ${fmt.plural(specialLeft, 'věc', 'věci', 'věcí')} bez štítku níže.`);
+    } else if (!cards.length) {
       if (tab === 'zbyva') empty = h('div', { class: 'box fill all-done' }, mark('ok', 'lg'), h('div', null, h('b', null, 'Všechno je označené.'), h('p', null, `Zkontroluj „Navíc“ dole a pošli výsledek ${ctx.prijemce}.`)));
       else empty = h('p', { class: 'muted empty-q' }, tab === 'jinak' ? 'Nic nechybí, všechno má štítek.' : 'Zatím nic.');
     }
@@ -369,7 +374,7 @@ export async function render(el, ctx, { params }) {
     sendResult(ctx, res);
   }
 
-  mount(el, headEl, scanBtnWrap, scanPanel, manualRow, tabsEl, listEl, restEl);
+  mount(el, headEl, scanBtnWrap, scanPanel, manualRow, tabsEl, listEl, specialEl, restEl);
   draw();
 
   const off = data.on(async (what, k) => {

@@ -120,3 +120,43 @@ export function readOnlyBanner(part, label, onReopen) {
 }
 
 export { mount };
+
+// Inventární číslo a pod ním menším písmem evidenční číslo v závorce – to staré, co bývá napsané na nábytku
+export function invBlock(it, extra = null) {
+  return [
+    h('b', { class: 'num' }, it.inv),
+    it.evid ? h('small', { class: 'num evid', title: 'Evidenční číslo (původní)' }, `(${it.evid})`) : null,
+    extra,
+  ];
+}
+
+// Věci, které se nelepí ani nečtou čtečkou (poznámka „neoznačeno“) a věci k vyřazení (poznámka „V“, „Vyřadit“).
+// Stačí odkliknout, jestli ve třídě jsou.
+export function specialSection(ctx, key, role, part, items, { readOnly = false } = {}) {
+  const list = items.filter(M.isSpecial);
+  if (!list.length) return null;
+  const done = list.filter((it) => M.itemState(part, it.inv)).length;
+  return h('section', { class: 'section special' },
+    h('div', { class: 'section-head' },
+      h('h2', null, 'Bez štítku – jen odklikni'),
+      h('span', { class: 'muted small num' }, `${done} z ${list.length}`)),
+    h('p', { class: 'small muted' }, 'Tyhle věci se nelepí ani nečtou čtečkou. Jen označ, jestli jsou ve třídě. Věci k vyřazení tu už být nemusí.'),
+    h('ul', { class: 'items special-list' }, list.map((it) => {
+      const cur = M.itemState(part, it.inv);
+      const kind = M.itemKind(it);
+      const opts = [
+        { s: 'ok', label: 'Je tu' },
+        { s: 'chybi', label: kind === 'vyradit' ? 'Už tu není' : 'Není tu' },
+      ];
+      return h('li', { class: `item ${cur ? 'is-' + cur.s : ''}` },
+        mark(!cur ? 'opt' : cur.s === 'ok' ? 'ok' : 'bad'),
+        h('div', { class: 'item-id' },
+          h('span', { class: 'item-title' }, it.nazev, ' ', h('span', { class: `kind kind-${kind}` }, M.KIND_LABEL[kind])),
+          h('span', { class: 'ids' }, invBlock(it))),
+        h('div', { class: 'seg seg-item seg-2', role: 'group', 'aria-label': `Stav ${it.inv}` }, opts.map((o) => h('button', {
+          'aria-pressed': String(cur?.s === o.s),
+          disabled: readOnly || undefined,
+          onclick: () => ctx.data.edit(key, role, (p, stamp) => { p.items[it.inv] = { s: cur?.s === o.s ? '' : o.s, jak: 'ruka', ...stamp() }; }),
+        }, o.label))));
+    })));
+}

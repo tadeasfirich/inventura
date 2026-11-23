@@ -32,6 +32,16 @@ SharePoint → Dokumenty → `Inventura` → `Výsledky 2026`:
 a soubor místnosti se přepíše nejpozději do půl minuty, při uzavření místnosti hned). „Poslat Marcelce“ k tomu
 jen přidá e-mail s Excelem v příloze.
 
+## Poznámky z evidence
+
+| Poznámka ve sloupci „Poznámka“ | Co aplikace udělá |
+|---|---|
+| `neoznačeno`, `neozačeno`, `Neoznačovat`, `Neoznačeno štítkem` | Věc se nelepí ani nečte čtečkou (rozhlas, koberec, věšák…). Je zvlášť v části „Bez štítku – jen odklikni“: **Je tu / Není tu**. Když není, Marcelka to uvidí jako „Chybí ve třídě“. |
+| `V`, `Vyřadit` | Věc k vyřazení, ve třídě už být nemusí. Taky jen **Je tu / Už tu není**. Když už tu není, v Excelu je „K vyřazení – už tu není“ (podklad k odepsání), ne „Chybí“. |
+
+Pod inventárním číslem je menším písmem v závorce **evidenční číslo** (to původní, které bývá napsané na nábytku),
+např. `9021212` a pod ním `(30012)`. Lepiči tak poznají, ke které věci štítek patří.
+
 ## Věc z jiné třídy
 
 Když učitel načte štítek věci, která podle evidence patří jinam, vyskočí okno „Tahle věc sem nepatří“

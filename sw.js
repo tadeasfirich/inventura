@@ -2,7 +2,7 @@
 // Při každé nové verzi zvyš VERSION, ať si telefony stáhnou nové soubory.
 // Vlastní soubory se vždy nejdřív zkusí ze sítě (ať se hned projeví nová verze), při výpadku z mezipaměti.
 
-const VERSION = 'inventura-v2';
+const VERSION = 'inventura-v3';
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',

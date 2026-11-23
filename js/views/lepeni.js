@@ -1,10 +1,11 @@
 // Lepení štítků v jedné místnosti. Stejné věci jsou pohromadě: „Židle žákovská – 20 ks“.
 // Jedno ťuknutí „Nalepeno vše“ odklikne celou skupinu. Když něco nesedí, skupina se rozklikne
 // a u konkrétních čísel se označí „Ve třídě není“ (štítek zbyl) nebo „Nemám štítek“.
+// Věci s poznámkou „neoznačeno“ (rozhlas, koberec…) a „V/Vyřadit“ se nelepí – jsou zvlášť, jen se odkliknou.
 
 import { h, mount, mark, toast, ask, fmt } from '../ui.js';
 import * as M from '../model.js';
-import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster } from './common.js';
+import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster, invBlock, specialSection } from './common.js';
 
 const ROLE = 'lepic';
 const ST = [
@@ -24,13 +25,16 @@ export async function render(el, ctx, { params }) {
     return null;
   }
   const items = room.items;
-  const groups = M.groupItems(items);
+  const normal = items.filter((it) => !M.isSpecial(it));
+  const special = items.filter(M.isSpecial);
+  const groups = M.groupItems(normal);
   const open = new Set();
   let doc = await data.room(key);
   data.pullRoom(key);
 
   const headEl = h('div');
   const listEl = h('div', { class: 'groups' });
+  const specialEl = h('div');
   const restEl = h('div');
 
   const part = () => doc.lepic;
@@ -89,7 +93,7 @@ export async function render(el, ctx, { params }) {
   function itemRow(it, ro) {
     const cur = M.itemState(part(), it.inv);
     return h('li', { class: 'item' },
-      h('div', { class: 'item-id' }, h('b', { class: 'num' }, it.inv), it.pozn ? h('small', { class: 'muted' }, it.pozn) : null),
+      h('div', { class: 'item-id' }, invBlock(it, it.pozn ? h('small', { class: 'muted' }, it.pozn) : null)),
       h('div', { class: 'seg seg-item', role: 'group', 'aria-label': `Stav ${it.inv}` }, ST.map((o) => h('button', {
         'aria-pressed': String(cur?.s === o.s),
         disabled: ro || undefined,
@@ -99,6 +103,7 @@ export async function render(el, ctx, { params }) {
 
   function draw() {
     const c = M.counts(part(), items);
+    const cn = M.counts(part(), normal);
     const ro = readOnly();
     mount(headEl,
       h('a', { class: 'back', href: listHref(ROLE) }, 'Místnosti'),
@@ -106,13 +111,15 @@ export async function render(el, ctx, { params }) {
       h('h1', { class: 'title' }, room.name),
       progress(c.done, c.total, 'Hotovo'),
       h('div', { class: 'legend' },
-        h('span', null, mark('ok'), `Nalepeno ${c.ok}`),
-        h('span', null, mark('bad'), `Ve třídě není ${c.chybi}`),
-        h('span', null, mark('bad'), `Nemám štítek ${c.bez}`),
+        h('span', null, mark('ok'), `Nalepeno ${cn.ok}`),
+        h('span', null, mark('bad'), `Ve třídě není ${cn.chybi}`),
+        h('span', null, mark('bad'), `Nemám štítek ${cn.bez}`),
+        special.length ? h('span', null, mark('opt'), `Bez štítku odkliknuto ${c.done - cn.done} z ${special.length}`) : null,
         c.navic ? h('span', null, mark('bad'), `Navíc ${c.navic}`) : null),
       readOnlyBanner(part(), 'Lepení', () => data.edit(key, ROLE, (p, stamp) => { p.hotovo = { v: false, ...stamp() }; })),
       !ro && !c.done ? h('p', { class: 'hint' }, 'Nalep celou skupinu a ťukni na „Nalepeno vše“. Když ti štítek zbyde nebo chybí, rozklikni skupinu.') : null);
     mount(listEl, groups.map(groupCard));
+    mount(specialEl, specialSection(ctx, key, ROLE, part(), items, { readOnly: ro }));
     mount(restEl,
       navicSection(ctx, key, ROLE, part(), { readOnly: ro }),
       noteSection(ctx, key, ROLE, part(), { readOnly: ro }),
@@ -121,7 +128,17 @@ export async function render(el, ctx, { params }) {
   }
 
   async function finish() {
-    const c = M.counts(part(), items);
+    const cs = M.counts(part(), special);
+    if (cs.nic) {
+      const v = await ask(`Odklikni ještě ${cs.nic} ${fmt.plural(cs.nic, 'věc', 'věci', 'věcí')} bez štítku`, 'Koberec, rozhlas a podobné věci se nelepí, jen se označí, jestli tu jsou.', [
+        { label: 'Zpět, odkliknu', value: 'back', kind: 'primary' },
+        { label: 'Ve třídě nejsou', value: 'chybi' },
+      ]);
+      if (v !== 'chybi') { specialEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      const invs = special.filter((it) => !M.itemState(part(), it.inv)).map((it) => it.inv);
+      await data.edit(key, ROLE, (p, stamp) => { for (const inv of invs) p.items[inv] = { s: 'chybi', ...stamp() }; });
+    }
+    const c = M.counts(part(), normal);
     if (c.nic) {
       const v = await ask(`Zbývá ${c.nic} ${fmt.plural(c.nic, 'věc', 'věci', 'věcí')}`, 'Nejsou označené jako nalepené. Co s nimi?', [
         { label: 'Zpět, dolepím', value: 'back', kind: 'primary' },
@@ -133,7 +150,7 @@ export async function render(el, ctx, { params }) {
         if (firstOpen) { open.add(firstOpen.key); draw(); el.querySelector('.group:not(.complete)')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
         return;
       }
-      const invs = items.filter((it) => !M.itemState(part(), it.inv)).map((it) => it.inv);
+      const invs = normal.filter((it) => !M.itemState(part(), it.inv)).map((it) => it.inv);
       await data.edit(key, ROLE, (p, stamp) => { for (const inv of invs) p.items[inv] = { s: v, ...stamp() }; });
     }
     await data.edit(key, ROLE, (p, stamp) => { p.hotovo = { v: true, ...stamp() }; });
@@ -142,14 +159,18 @@ export async function render(el, ctx, { params }) {
     location.hash = listHref(ROLE);
   }
 
-  mount(el, headEl, listEl, restEl);
+  mount(el, headEl, listEl, specialEl, restEl);
   draw();
 
   const off = data.on(async (what, k) => {
     if (what === 'room' && k === key) {
       doc = await data.room(key);
       const ae = document.activeElement;
-      if (ae && ae.tagName === 'TEXTAREA') { mount(listEl, groups.map(groupCard)); return; } // nerušit psaní poznámky
+      if (ae && ae.tagName === 'TEXTAREA') { // nerušit psaní poznámky
+        mount(listEl, groups.map(groupCard));
+        mount(specialEl, specialSection(ctx, key, ROLE, doc.lepic, items, { readOnly: readOnly() }));
+        return;
+      }
       draw();
     }
   });

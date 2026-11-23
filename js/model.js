@@ -25,6 +25,21 @@ export const STAV_UCITEL = {
   bez: 'Bez štítku',
 };
 
+// ---------------------------------------------------------------- druh věci podle poznámky
+// Sloupec Poznámka v evidenci:
+//   „neoznačeno“, „neozačeno“, „Neoznačovat“, „Neoznačeno štítkem“ → věc se nelepí ani nečte čtečkou,
+//      jen se odklikne, jestli ve třídě je (typicky rozhlas, koberec, věšák).
+//   „V“, „Vyřadit“ → věc jde k vyřazení, ve třídě už být nemusí.
+export function itemKind(it) {
+  const n = normalize(it?.pozn).replace(/\s+/g, ' ');
+  if (!n) return 'normal';
+  if (n === 'v' || n === 'v.' || n.startsWith('vyrad') || n.includes('vyradit')) return 'vyradit';
+  if (n.includes('neoz')) return 'nestitkovat';
+  return 'normal';
+}
+export const isSpecial = (it) => itemKind(it) !== 'normal';
+export const KIND_LABEL = { nestitkovat: 'nelepí se', vyradit: 'k vyřazení' };
+
 // ---------------------------------------------------------------- místnosti
 
 export function roomKey(name) {
@@ -222,12 +237,12 @@ export function summarize(doc, items) {
 // ---------------------------------------------------------------- výsledek pro hospodářku
 
 // Výsledný stav věci: rozhoduje inventura učitele, když chybí, tak lepení.
-export function finalState(doc, inv) {
+export function finalState(doc, inv, it = null) {
   const u = itemState(doc.ucitel, inv);
   const l = itemState(doc.lepic, inv);
   if (u) {
-    // ručně odkliknutá věc, na kterou lepič neměl štítek, štítek pořád potřebuje
-    if (u.s === 'ok' && l?.s === 'bez' && u.jak !== 'sken') {
+    // ručně odkliknutá věc, na kterou lepič neměl štítek, štítek pořád potřebuje (neplatí pro věci, co se nelepí)
+    if (u.s === 'ok' && l?.s === 'bez' && u.jak !== 'sken' && !isSpecial(it)) {
       return { s: 'bez', zdroj: 'Lepení + inventura', pozn: u.pozn || 'Při lepení nebyl štítek, při inventuře nalezeno.', u, l };
     }
     return { s: u.s, zdroj: 'Inventura', pozn: u.pozn || '', u, l };
@@ -236,7 +251,11 @@ export function finalState(doc, inv) {
   return { s: null, zdroj: '', pozn: '', u, l };
 }
 
-export function jakOvereno(f) {
+export function jakOvereno(f, it = null) {
+  const kind = itemKind(it);
+  if (kind !== 'normal' && (f.u?.s === 'ok' || f.l?.s === 'ok')) {
+    return kind === 'vyradit' ? 'Je tu (k vyřazení)' : 'Je tu (neoznačuje se štítkem)';
+  }
   if (f.u?.s === 'ok') return f.u.jak === 'sken' ? 'Inventura – čtečkou' : 'Inventura – odkliknuto';
   if (f.l?.s === 'ok') return 'Nalepeno (inventura zatím ne)';
   return '';
