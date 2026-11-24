@@ -154,8 +154,9 @@ function evidence(el, ctx) {
       h('div', { class: 'btn-row' },
         h('button', {
           class: 'btn primary', onclick: async (e) => {
+            const btn = e.currentTarget; // po await už currentTarget neexistuje
             if (data.master && !(await confirmDialog('Nahradit evidenci?', `Současná evidence (${data.master.items.length} položek) se nahradí novou (${res.items.length} položek).`, 'Nahradit'))) return;
-            e.currentTarget.disabled = true;
+            btn.disabled = true; btn.textContent = 'Nahrávám…';
             try {
               await data.saveMaster({
                 v: 1, kolo: data.kolo, imported: new Date().toISOString(), by: ctx.user.name,
@@ -163,7 +164,7 @@ function evidence(el, ctx) {
               });
               toast('Evidence nahraná', { kind: 'ok' });
               ctx.navigate('#/sprava/prehled');
-            } catch (err) { toast(err.message, { timeout: 8000 }); e.currentTarget.disabled = false; }
+            } catch (err) { toast(err.message, { timeout: 8000 }); btn.disabled = false; btn.textContent = 'Nahrát do aplikace'; }
           },
         }, 'Nahrát do aplikace'),
         h('button', { class: 'btn ghost', onclick: () => mount(previewEl) }, 'Zrušit'))));

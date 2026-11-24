@@ -16,6 +16,10 @@ Počítej zhruba s jedním odpolednem.
 
 ---
 
+**Stačí to na evidenci se 3000 řádky?** Ano. Evidence je jeden soubor v knihovně Dokumenty (ne SharePoint
+seznam, takže se neřeší limit 5000 položek). Zkušební Excel se 3000 řádky a 70 místnostmi: načtení 0,5 s,
+soubor na SharePointu 0,5 MB, telefon ho stahuje jen jednou a pak znovu jen po nahrání nové evidence.
+
 ## 1. Vyzkoušej testovací režim
 
 Dokud je v `js/config.js` místo `clientId` text `DOPLNIT`, aplikace běží v testovacím režimu: ukázková data
@@ -51,8 +55,10 @@ Aplikace ukládá všechno do **jedné složky** v knihovně Dokumenty jednoho S
 
 1. Buď použij existující web, kam mají přístup všichni zaměstnanci, nebo založ nový:
    **SharePoint → Vytvořit web → Týmový web** (bez Teams stačí), název `Inventura`.
-2. **Oprávnění webu → Členové (úpravy):** skupina učitelů (`Kantoři`, `Asistentky`), lepiči a hospodářka.
+2. Ozubené kolečko → **Oprávnění webu → Sdílet jen web:** skupina učitelů, `Inventura Lepiči` a hospodářka,
+   oprávnění **Upravovat**, bez odeslání e-mailu. (Do „Přidat členy“ týmového webu skupiny zabezpečení nejdou.)
    Každý, kdo v aplikaci zapisuje, musí mít na web právo **upravovat** – aplikace smí jen to, co smí přihlášený člověk.
+   Skupiny proto založ nejdřív (krok 4).
 3. Složku `Inventura` zakládat nemusíš, vznikne sama při prvním uložení.
 
 Co v ní bude:
@@ -82,7 +88,9 @@ Role se určují podle skupin. Mapování je v `js/config.js` (`roleGroups`), ta
 | lepič | `Inventura Lepiči` | ty, co lepí štítky |
 
 Založení: **admin.microsoft.com → Týmy a skupiny → Aktivní týmy a skupiny → Přidat skupinu → Zabezpečení**.
-Na velikosti písmen a diakritice v názvu nezáleží. Pokud by lepiči byli žáci, mají školní účet taky – stačí je
+Na velikosti písmen a diakritice v názvu nezáleží. Typ skupiny učitelů zkontroluj ve sloupci **Typ**: Microsoft 365
+a Zabezpečení jsou v pořádku, **Distribuční seznam** do oprávnění SharePointu přidat nejde – pak založ skupinu
+zabezpečení „Inventura Učitelé“. Pokud by lepiči byli žáci, mají školní účet taky – stačí je
 dát do skupiny a skupinu přidat mezi členy webu z kroku 3.
 
 ✔ Ve skupině `Inventura Správci` jsi ty, v `Inventura Lepiči` jsou lepiči.
@@ -92,7 +100,8 @@ dát do skupiny a skupinu přidat mezi členy webu z kroku 3.
 1. **entra.microsoft.com → Aplikace → Registrace aplikací → Nová registrace.**
 2. Název `Inventura`, typ účtu: **Jen účty v tomto adresáři organizace**.
 3. Identifikátor URI pro přesměrování: platforma **Jednostránková aplikace (SPA)**,
-   adresa `https://tadeasfirich.github.io/inventura/` (i s lomítkem na konci).
+   adresa `https://tadeasfirich.github.io/inventura/` (i s lomítkem na konci). V části **Ověřování** přidej
+   ještě `https://tadeasfirich.github.io/inventura/index.html`.
 4. Zaregistrovat. Z přehledu si opiš **ID aplikace (klienta)** a **ID adresáře (tenanta)**.
 5. **Oprávnění rozhraní API → Přidat oprávnění → Microsoft Graph → Delegovaná:**
    - `User.Read` – jméno a e-mail přihlášeného
@@ -122,7 +131,8 @@ sharepoint: {
 Zkontroluj i `defaults` (e-mail hospodářky `bukova@skola.libcice.cz`, tvar „Marcelce“) – obojí se dá později
 změnit přímo v aplikaci ve Správě → Nastavení.
 
-Pak v `sw.js` zvyš `VERSION` (např. `inventura-v2`), ať si telefony stáhnou novou verzi.
+Do `spravciEmails` dej svůj školní e-mail jako pojistku. Název inventury (`kolo`) je pevně „2026“, aby se
+v lednu sám nepřepnul. Po uložení se nová verze objeví do 1–2 minut (záložka Actions, zelená fajfka).
 
 ✔ Na adrese aplikace je tlačítko „Přihlásit přes Microsoft“ a po přihlášení vidíš Správu.
 
@@ -172,7 +182,7 @@ Telefon se ale musí aspoň jednou přihlásit s internetem.
 
 ## 10. Kontrolní seznam před spuštěním
 
-- [ ] Pages běží, `config.js` vyplněný, `VERSION` v `sw.js` zvýšená
+- [ ] Pages běží, `config.js` vyplněný
 - [ ] Souhlas správce v Entra ID udělený (4 oprávnění)
 - [ ] Skupiny `Inventura Správci` a `Inventura Lepiči` naplněné
 - [ ] Učitelé, lepiči a hospodářka mají na SharePoint web právo upravovat

@@ -74,8 +74,9 @@ export async function render(el, ctx, { role }) {
           h('button', {
             class: 'btn primary', disabled: !done || undefined,
             onclick: async (e) => {
+              const btn = e.currentTarget;
               if (!(await confirmDialog(`Poslat ${ctx.prijemce}?`, `Odešle se přehled lepení (${done} hotových místností) a uloží se Excel na SharePoint.`, 'Poslat'))) return;
-              e.target.disabled = true; e.target.textContent = 'Odesílám…';
+              btn.disabled = true; btn.textContent = 'Odesílám…';
               const res = await data.send('lepic');
               sendResult(ctx, res);
               draw();

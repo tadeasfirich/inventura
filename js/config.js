@@ -21,7 +21,7 @@ export const CONFIG = {
 
   // Výchozí hodnoty, které správce může změnit přímo v aplikaci (Správa → Nastavení).
   defaults: {
-    kolo: String(new Date().getFullYear()),        // název inventury, např. „2026“
+    kolo: '2026',                                    // název inventury; pevně, ať se v lednu samo nepřepne na nový rok
     prijemceJmeno: 'Marcelce',                       // tvar do tlačítka „Poslat Marcelce“
     prijemceEmail: 'bukova@skola.libcice.cz',
     posilatEmail: true,
