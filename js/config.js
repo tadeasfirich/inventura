@@ -36,7 +36,7 @@ export const CONFIG = {
   },
 
   // Pojistka: tyto účty jsou správci vždy, i kdyby je někdo vyřadil ze skupiny.
-  spravciEmails: [firich@skola.libcice.cz],
+  spravciEmails: ['firich@skola.libcice.cz'],
 
   // Oprávnění Microsoft Graph (delegovaná – aplikace smí jen to, co smí přihlášený člověk).
   scopes: ['User.Read', 'GroupMember.Read.All', 'Sites.ReadWrite.All', 'Mail.Send'],

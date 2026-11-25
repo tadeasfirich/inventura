@@ -44,6 +44,7 @@ boot().catch((e) => {
 });
 
 async function boot() {
+  window.__appStarted = true;
   registerSW();
   if (demo) {
     const u = auth.demoUser();

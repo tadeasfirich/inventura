@@ -24,6 +24,29 @@
   </div>
   <div id="toasts" aria-live="polite"></div>
   <noscript>Aplikace potřebuje zapnutý JavaScript.</noscript>
+  <script>
+    // Pojistka: když se aplikace nespustí (např. překlep v js/config.js), ukaž chybu místo nekonečného načítání.
+    (function () {
+      var shown = false;
+      function fail(msg) {
+        if (shown || window.__appStarted) return;
+        shown = true;
+        var el = document.getElementById('app');
+        el.innerHTML = '<main class="login"><div class="login-card"><div class="eyebrow">Chyba při spuštění</div>' +
+          '<h1 class="title">Aplikace se nespustila</h1><p></p>' +
+          '<p class="muted small">Nejčastěji jde o překlep v souboru js/config.js (chybějící uvozovka nebo čárka). ' +
+          'Když je soubor v pořádku, zkontroluj připojení k internetu a obnov stránku.</p>' +
+          '<button class="btn" onclick="location.reload()">Obnovit stránku</button></div></main>';
+        el.querySelector('p').textContent = msg;
+      }
+      window.addEventListener('error', function (e) {
+        var t = e && e.target;
+        if (t && t.tagName === 'SCRIPT') fail('Nepodařilo se načíst soubor ' + (t.src || '') + '.');
+        else if (e && e.message) fail(e.message + (e.filename ? ' (' + e.filename.split('/').slice(-2).join('/') + ', řádek ' + e.lineno + ')' : ''));
+      }, true);
+      setTimeout(function () { fail('Spuštění trvá příliš dlouho.'); }, 20000);
+    })();
+  </script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
