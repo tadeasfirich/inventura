@@ -8,13 +8,13 @@ export const CONFIG = {
   // Dokud je clientId „DOPLNIT“, aplikace běží v testovacím režimu: data jen v tomto prohlížeči,
   // přihlášení výběrem role. Testovací režim jde vynutit i adresou s ?demo=1.
   msal: {
-    clientId: 'DOPLNIT',
-    tenantId: 'DOPLNIT',
+    clientId: 'd4b0e9c0-e0c7-4f3e-bd19-bcd657f49bc3',
+    tenantId: '250cc053-db88-43ef-9b49-f32166589a36',
   },
 
   // Kam se ukládá: SharePoint web → knihovna Dokumenty → složka `folder`.
   sharepoint: {
-    hostname: 'DOPLNIT.sharepoint.com', // např. skolalibcice.sharepoint.com
+    hostname: 'zslibcice.sharepoint.com', // např. skolalibcice.sharepoint.com
     sitePath: '/sites/Inventura',       // web, kam má přístup hospodářka i učitelé
     folder: 'Inventura',                // hlavní složka v knihovně Dokumenty
   },
@@ -31,12 +31,12 @@ export const CONFIG = {
   // nebo její ID. Má-li účet víc rolí, platí nejvyšší: spravce > ucitel > lepic.
   roleGroups: {
     spravce: ['Inventura Správci'],
-    ucitel: ['Kantoři', 'Asistentky'],
+    ucitel: ['Kantoři', 'Asistenti'],
     lepic: ['Inventura Lepiči'],
   },
 
   // Pojistka: tyto účty jsou správci vždy, i kdyby je někdo vyřadil ze skupiny.
-  spravciEmails: [],
+  spravciEmails: [firich@skola.libcice.cz],
 
   // Oprávnění Microsoft Graph (delegovaná – aplikace smí jen to, co smí přihlášený člověk).
   scopes: ['User.Read', 'GroupMember.Read.All', 'Sites.ReadWrite.All', 'Mail.Send'],
