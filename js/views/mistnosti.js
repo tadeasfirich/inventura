@@ -67,21 +67,24 @@ export async function render(el, ctx, { role }) {
 
     if (role === 'lepic') {
       const done = cnt('hotovo');
+      const rozpr = cnt('rozpr');
+      const lp = data.status.lastPublish;
       mount(footEl, h('section', { class: 'box fill end-box' },
-        h('h4', null, 'Konec lepení'),
-        h('p', null, `Hotovo ${done} z ${rooms.length} místností. Excel na SharePointu se ukládá sám; tlačítkem pošleš ${ctx.prijemce} navíc e-mail.`),
+        h('h4', null, `Poslat ${ctx.prijemce}`),
+        h('p', null, `Hotovo ${done}, rozdělané ${rozpr} z ${rooms.length} místností. Nemusíš mít hotové všechno: pošli, co máš, a ${ctx.prijemce} přijde aktuální Excel.`),
+        h('p', { class: 'small muted' }, lp ? `Excel na SharePointu naposledy aktualizován ${fmt.short(lp)}.` : 'Excel na SharePointu se aktualizuje sám, jakmile začneš lepit.'),
         h('div', { class: 'btn-col' },
           h('button', {
-            class: 'btn primary', disabled: !done || undefined,
+            class: 'btn primary', disabled: !(done + rozpr) || undefined,
             onclick: async (e) => {
               const btn = e.currentTarget;
-              if (!(await confirmDialog(`Poslat ${ctx.prijemce}?`, `Odešle se přehled lepení (${done} hotových místností) a uloží se Excel na SharePoint.`, 'Poslat'))) return;
-              btn.disabled = true; btn.textContent = 'Odesílám…';
+              if (!(await confirmDialog(`Uložit a poslat ${ctx.prijemce}?`, `Aktuální stav lepení (hotovo ${done}, rozdělané ${rozpr}) se hned uloží do Excelu na SharePointu a ${ctx.prijemce} přijde e-mail. Lepit můžeš dál, poslat jde kdykoli znovu.`, 'Uložit a poslat'))) return;
+              btn.disabled = true; btn.textContent = 'Ukládám a odesílám…';
               const res = await data.send('lepic');
               sendResult(ctx, res);
               draw();
             },
-          }, `Poslat ${ctx.prijemce}`),
+          }, `Uložit a poslat ${ctx.prijemce}`),
           h('button', {
             class: 'btn ghost', onclick: async () => {
               const blob = await data.overviewXlsx();
@@ -113,7 +116,7 @@ export async function render(el, ctx, { role }) {
     footEl);
   draw();
 
-  const off = data.on((what) => { if (['stav', 'master', 'room'].includes(what)) draw(); });
+  const off = data.on((what) => { if (['stav', 'master', 'room', 'published'].includes(what)) draw(); });
   data.pullStav().then(() => draw()).catch(() => {});
   const t = setInterval(() => data.pullStav().catch(() => {}), 30000);
   return () => { off(); clearInterval(t); };

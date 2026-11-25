@@ -5,7 +5,7 @@
 
 import { h, mount, mark, toast, ask, formDialog, modal, fmt, uid } from '../ui.js';
 import * as M from '../model.js';
-import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster, downloadRoom, sendResult, addNavicDialog, invBlock, specialSection } from './common.js';
+import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster, downloadRoom, sendResult, addNavicDialog, invBlock, specialSection, itemQuery, roomSearchInput } from './common.js';
 import { CameraScanner, cameraSupported, listenKeyboardScanner, feedback, fixKeyboard, prewarm, soundOn, setSound, unlockAudio } from '../scanner.js';
 
 const ROLE = 'ucitel';
@@ -201,16 +201,21 @@ export async function render(el, ctx, { params }) {
     return true;
   };
 
+  // hledání v seznamu: název ukáže celou skupinu, číslo jen kusy, které sedí
+  let q = itemQuery('');
+  const searchEl = roomSearchInput((v) => { q = itemQuery(v); drawList(); }, { sticky: false });
+
   function groupCard(g) {
     const ro = readOnly();
-    const shown = g.items.filter(inTab);
+    const nameHit = q.empty || g.items.some(q.name);
+    const shown = g.items.filter((it) => inTab(it) && (nameHit || q.num(it)));
     if (!shown.length) return null;
     if (g.items.length === 1) return singleCard(g.items[0], ro);
     const sts = g.items.map((it) => M.itemState(part(), it.inv));
     const done = sts.filter(Boolean).length;
     const bad = sts.filter((s) => s && s.s !== 'ok').length;
     const unset = g.items.filter((_, i) => !sts[i]);
-    const isOpen = open.has(g.key) || g.items.length === 1 || tab === 'jinak';
+    const isOpen = open.has(g.key) || g.items.length === 1 || tab === 'jinak' || !nameHit;
     const shape = done === g.items.length ? (bad ? 'bad' : 'ok') : done ? 'wait' : 'opt';
     return h('article', { class: `group ${isOpen ? 'open' : ''}` },
       h('div', { class: 'group-main' },
@@ -295,8 +300,13 @@ export async function render(el, ctx, { params }) {
       onclick: () => { tab = t.id; drawList(); },
     }, t.label, h('span', { class: 'cnt' }, n[t.id]))));
     const cards = M.groupItems(normal).map(groupCard).filter(Boolean);
-    mount(specialEl, specialSection(ctx, key, ROLE, part(), items, { readOnly: readOnly() }));
+    const sp = q.empty ? items : items.filter((it) => M.isSpecial(it) && (q.name(it) || q.num(it)));
+    mount(specialEl, sp.length ? specialSection(ctx, key, ROLE, part(), sp, { readOnly: readOnly() }) : null);
     let empty = null;
+    if (!q.empty && !cards.length) {
+      mount(listEl, h('p', { class: 'muted empty-q' }, sp.length ? 'V této záložce nic, podívej se níž nebo do záložky Vše.' : 'V této místnosti nic takového není. Zkus jiné slovo nebo číslo, nebo záložku Vše.'));
+      return;
+    }
     const specialLeft = items.filter((it) => M.isSpecial(it) && !M.itemState(part(), it.inv)).length;
     if (!cards.length && tab === 'zbyva' && specialLeft) {
       empty = h('p', { class: 'hint' }, `Se štítkem je hotovo. Odklikni ještě ${specialLeft} ${fmt.plural(specialLeft, 'věc', 'věci', 'věcí')} bez štítku níže.`);
@@ -374,7 +384,7 @@ export async function render(el, ctx, { params }) {
     sendResult(ctx, res);
   }
 
-  mount(el, headEl, scanBtnWrap, scanPanel, manualRow, tabsEl, listEl, specialEl, restEl);
+  mount(el, headEl, scanBtnWrap, scanPanel, manualRow, searchEl, tabsEl, listEl, specialEl, restEl);
   draw();
 
   const off = data.on(async (what, k) => {

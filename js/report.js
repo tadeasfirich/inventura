@@ -225,19 +225,24 @@ ${a.jinak.length > 80 ? `<p>… a dalších ${a.jinak.length - 80} řádků v p�
 }
 
 export function lepeniMail({ index, docs, user, folderUrl, kolo }) {
-  const done = [];
+  // hotové i rozdělané místnosti – lepiči posílají průběžně, ne až na konci všeho
+  const list = [];
   for (const r of index.rooms) {
     const d = docs.get(r.key);
-    if (!d?.lepic?.hotovo?.v) continue;
-    const c = M.counts(d.lepic, r.items);
-    done.push({ r, c, navic: M.navicList(d.lepic).length });
+    const st = d ? M.partStatus(d.lepic, r.items) : 'none';
+    if (st === 'none') continue;
+    list.push({ r, st, c: M.counts(d.lepic, r.items), navic: M.navicList(d.lepic).length });
   }
-  const rows = done.map(({ r, c, navic }) => `<tr><td ${TD}>${e(r.name)}</td><td ${TD}>${c.ok}</td><td ${TD}>${c.chybi}</td><td ${TD}>${c.bez}</td><td ${TD}>${navic}</td></tr>`).join('');
-  const inner = `<p>Dobrý den,<br>posílám stav lepení štítků. Hotovo je <b>${done.length} z ${index.rooms.length}</b> místností. Odeslal(a) ${e(user.name)}.</p>
-<table style="border-collapse:collapse;font-size:14px"><tr><th ${TH}>Místnost</th><th ${TH}>Nalepeno</th><th ${TH}>Ve třídě není</th><th ${TH}>Nemám štítek</th><th ${TH}>Navíc</th></tr>${rows}</table>`;
+  list.sort((x, y) => (x.st === y.st ? 0 : x.st === 'hotovo' ? -1 : 1));
+  const done = list.filter((x) => x.st === 'hotovo').length;
+  const rozpr = list.length - done;
+  const rows = list.map(({ r, st, c, navic }) => `<tr><td ${TD}>${e(r.name)}</td><td ${TD}>${st === 'hotovo' ? 'hotovo' : `rozdělané (zbývá ${c.nic})`}</td><td ${TD}>${c.ok}</td><td ${TD}>${c.chybi}</td><td ${TD}>${c.bez}</td><td ${TD}>${navic}</td></tr>`).join('');
+  const inner = `<p>Dobrý den,<br>posílám průběžný stav lepení štítků. Hotovo <b>${done}</b>, rozdělané ${rozpr}, celkem místností ${index.rooms.length}. Odeslal(a) ${e(user.name)}.</p>
+<table style="border-collapse:collapse;font-size:14px"><tr><th ${TH}>Místnost</th><th ${TH}>Stav</th><th ${TH}>Nalepeno</th><th ${TH}>Ve třídě není</th><th ${TH}>Nemám štítek</th><th ${TH}>Navíc</th></tr>${rows}</table>
+<p>Excel v příloze je aktuální k okamžiku odeslání. Na SharePointu se dál aktualizuje sám.</p>`;
   return {
-    subject: `Inventura ${kolo} – lepení štítků (${done.length} z ${index.rooms.length} místností)`,
-    html: mailShell('Lepení štítků', inner, [{ label: 'Otevřít složku inventury', url: folderUrl }]),
+    subject: `Inventura ${kolo} – lepení štítků (hotovo ${done}, rozdělané ${rozpr} z ${index.rooms.length})`,
+    html: mailShell('Lepení štítků – průběžný stav', inner, [{ label: 'Otevřít složku inventury', url: folderUrl }]),
   };
 }
 

@@ -1,6 +1,6 @@
 // Společné kousky obrazovek lepení a inventury.
 
-import { h, mount, mark, toast, formDialog, confirmDialog, fmt, downloadBlob, uid } from '../ui.js';
+import { h, mount, mark, toast, formDialog, confirmDialog, fmt, downloadBlob, uid, normalize } from '../ui.js';
 import * as M from '../model.js';
 
 export const roomHref = (role, key) => `#/${role === 'lepic' ? 'lepeni' : 'inventura'}/${encodeURIComponent(key)}`;
@@ -159,4 +159,27 @@ export function specialSection(ctx, key, role, part, items, { readOnly = false }
           onclick: () => ctx.data.edit(key, role, (p, stamp) => { p.items[it.inv] = { s: cur?.s === o.s ? '' : o.s, jak: 'ruka', ...stamp() }; }),
         }, o.label))));
     })));
+}
+
+// ---------------------------------------------------------------- hledání v místnosti
+// Podle názvu („monitor“) nebo podle čísla – inventárního i evidenčního („2815“, „DDHM42“).
+export function itemQuery(q) {
+  const n = normalize(q).replace(/\s+/g, ' ').trim();
+  const compact = n.replace(/\s+/g, '');
+  return {
+    empty: !n,
+    name: (it) => !!n && normalize(it.nazev).includes(n),
+    num: (it) => !!compact && (String(it.inv).toLowerCase().includes(compact) || normalize(it.evid).replace(/\s+/g, '').includes(compact)),
+  };
+}
+
+export function roomSearchInput(onChange, { sticky = true } = {}) {
+  const input = h('input', {
+    type: 'search', class: 'search search-room', placeholder: 'Hledat v místnosti: název nebo číslo',
+    'aria-label': 'Hledat v místnosti podle názvu nebo čísla', autocomplete: 'off', enterkeyhint: 'search',
+  });
+  let t = null;
+  input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => onChange(input.value), 120); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+  return h('div', { class: sticky ? 'search-wrap room-search' : 'room-search' }, input);
 }

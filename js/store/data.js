@@ -13,6 +13,10 @@ import { idb } from './idb.js';
 import * as M from '../model.js';
 import * as R from '../report.js';
 
+function readLastPublish() {
+  try { return localStorage.getItem('last-publish') || null; } catch { return null; }
+}
+
 // Novější shrnutí místnosti: rozhoduje čas poslední změny, při shodě to, které už je v Excelu.
 function betterSummary(a, b) {
   if (!a) return b;
@@ -32,7 +36,7 @@ export class Data {
     this.stav = {};
     this.recs = new Map();
     this.listeners = new Set();
-    this.status = { pending: 0, offline: false, error: null, syncing: false, lastSync: null };
+    this.status = { pending: 0, offline: false, error: null, syncing: false, lastSync: null, lastPublish: readLastPublish() };
     this.lock = Promise.resolve();
     this.syncing = null;
     this.syncAgain = false;
@@ -305,6 +309,12 @@ export class Data {
     }
   }
 
+  notePublished() {
+    this.status.lastPublish = new Date().toISOString();
+    try { localStorage.setItem('last-publish', this.status.lastPublish); } catch { /* nic */ }
+    this.emit('published');
+  }
+
   // Odchod z místnosti nebo zavření aplikace: zapsat Excel hned, nečekat na 20 s
   flush(key) {
     if (key) this.pubAttempt.delete(key);
@@ -333,6 +343,7 @@ export class Data {
       if (!last) continue;
       const { blob } = R.roomWorkbook(doc, this.roomItems(key), this.index, this.kolo, this.foundElsewhere());
       await this.be.putFile(this.paths.roomXlsx(key), blob);
+      this.notePublished();
       this.stav[key] = { ...M.summarize(doc, this.roomItems(key)), pub: last };
       this.stavDirty.add(key);
       published++;
@@ -345,7 +356,7 @@ export class Data {
     await this.maybeOverview();
   }
 
-  // Přehled všech místností: při uzavření místnosti hned, jinak nejvýš jednou za 3 minuty
+  // Přehled všech místností: při uzavření místnosti hned, jinak nejvýš jednou za minutu
   async maybeOverview() {
     const now = Date.now();
     const vals = Object.values(this.stav).filter(Boolean);
@@ -358,7 +369,7 @@ export class Data {
     if (upTo && maxT <= upTo) return;
     const closed = vals.some((st) => [st.ucitel?.kdy, st.lepic?.kdy, st.ucitel?.odeslano].some((x) => x && String(x) > upTo));
     const at = meta?.data?.at ? Date.parse(meta.data.at) : 0;
-    if (!closed && now - at < 3 * 60000) return;
+    if (!closed && now - at < 60000) return;
     const docs = await this.allDocs();
     await this.writeOverview(docs, maxT, meta?.etag || null);
   }
@@ -366,6 +377,7 @@ export class Data {
   async writeOverview(docs, upTo, etag) {
     const blob = R.overviewWorkbook(this.index, docs, this.kolo);
     await this.be.putFile(this.paths.overview, blob);
+    this.notePublished();
     if (!upTo) upTo = [...docs.values()].reduce((m, d) => { const t = M.lastChange(d); return t > m ? t : m; }, '');
     try {
       if (etag === undefined) etag = (await this.be.getJson(this.paths.prehled))?.etag || null;
@@ -417,7 +429,8 @@ export class Data {
     const docs = await this.allDocs();
     const user = { name: a.name, email: a.by };
     let rooms = a.rooms;
-    if (a.role === 'lepic') rooms = [...docs.entries()].filter(([, d]) => d.lepic?.hotovo?.v).map(([k]) => k);
+    // lepiči posílají i rozdělanou práci: všechny místnosti, kde se už lepilo
+    if (a.role === 'lepic') rooms = [...docs.entries()].filter(([k, d]) => M.partStatus(d.lepic, this.roomItems(k)) !== 'none').map(([k]) => k);
     // čas odeslání patří už do odesílaného Excelu
     const sentStamp = { t: a.t, by: a.by, name: a.name };
     for (const key of rooms) { const d = docs.get(key); if (d) d[a.role].odeslano = sentStamp; }

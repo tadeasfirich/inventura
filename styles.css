@@ -362,3 +362,10 @@ tr.click:hover td { background: var(--fill); }
 .kind-vyradit { border-style: dashed; }
 .seg-2 { flex: 2 1 180px; }
 .section.special .items { padding: 0; }
+
+/* dlouhé evidenční číslo (DDHM4263043A) se na malém telefonu zalomí, místo aby lezlo pod tlačítka */
+.item-id b, .item-id .evid { overflow-wrap: anywhere; word-break: break-all; }
+.group .meta span { overflow-wrap: anywhere; min-width: 0; }
+.room-search { margin-top: 14px; }
+.search-room { font-size: 18px !important; min-height: 50px !important; }
+.search-hits { margin: 10px 0 0; }

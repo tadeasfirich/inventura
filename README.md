@@ -15,6 +15,10 @@ běží testovací režim s ukázkovými daty jen v prohlížeči).
 | **Učitel** | kdokoli ze sborovny | Otevře svou (nahoře „Tvoje třída“) nebo cizí místnost, zapne čtečku a projde třídu. Načtené věci se samy odškrtnou. Pak vidí, co zbývá: dohledá, odklikne „Je tu“, označí „Chybí“ nebo „Bez štítku“ s poznámkou, kde věc stojí. Věc z jiné místnosti se zapíše jako navíc i s tím, kam patří. „Hotovo – poslat Marcelce“. |
 | **Správce** | Tadeáš | Nahraje Excel s evidencí, vidí přehled všech místností, přegeneruje Excely pro hospodářku, nastaví příjemce. Přepíná se i do Lepení a Inventury. |
 
+**Hledání v místnosti:** pole „Hledat v místnosti“ najde věc podle názvu (ukáže celou skupinu) nebo podle
+inventárního či evidenčního čísla (ukáže jen ty kusy). Lepiči mohou „Uložit a poslat Marcelce“ kdykoli,
+i s rozdělanými místnostmi – Excel se hned aktualizuje.
+
 ## Čtečka čárových kódů
 
 - **Kamera telefonu** – tlačítko „Zapnout čtečku“. Android + Chrome: vestavěná čtečka, rychlá. iPhone: napoprvé (s wifi) se stáhne čtečka ZXing, pak jede i offline. Pípnutí + vibrace, světlo a přiblížení, když je telefon umí.

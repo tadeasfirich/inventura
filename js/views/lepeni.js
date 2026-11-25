@@ -5,7 +5,7 @@
 
 import { h, mount, mark, toast, ask, fmt } from '../ui.js';
 import * as M from '../model.js';
-import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster, invBlock, specialSection } from './common.js';
+import { listHref, progress, navicSection, noteSection, readOnlyBanner, emptyMaster, invBlock, specialSection, itemQuery, roomSearchInput } from './common.js';
 
 const ROLE = 'lepic';
 const ST = [
@@ -51,7 +51,8 @@ export async function render(el, ctx, { params }) {
     });
   }
 
-  function groupCard(g) {
+  // hits = jen tyhle kusy (hledání podle čísla), null = celá skupina
+  function groupCard(g, hits = null) {
     const ro = readOnly();
     const sts = g.items.map((it) => M.itemState(part(), it.inv));
     const unset = g.items.filter((_, i) => !sts[i]);
@@ -59,7 +60,7 @@ export async function render(el, ctx, { params }) {
     sts.forEach((s) => { if (s) c[s.s]++; });
     const complete = unset.length === 0;
     const problems = c.chybi + c.bez;
-    const isOpen = open.has(g.key);
+    const isOpen = open.has(g.key) || !!hits;
     const shape = !complete ? (unset.length < g.items.length ? 'wait' : 'opt') : problems ? 'bad' : 'ok';
     const summary = [
       c.ok ? `nalepeno ${c.ok}` : '',
@@ -84,10 +85,11 @@ export async function render(el, ctx, { params }) {
             class: 'btn primary big-tap',
             onclick: () => setMany(unset.map((i) => i.inv), 'ok', `Nalepeno ${unset.length}× – ${g.nazev}`),
           }, unset.length === g.items.length ? (g.items.length === 1 ? 'Nalepeno' : `Nalepeno vše ${g.items.length}`) : `Nalepeno zbylé ${unset.length}`))),
-      h('button', { class: 'group-toggle', 'aria-expanded': String(isOpen), onclick: toggle },
-        h('span', null, isOpen ? 'Sbalit' : (g.items.length > 1 ? 'Rozkliknout po kusech' : 'Rozkliknout')),
-        summary ? h('span', { class: 'muted' }, summary) : null),
-      isOpen ? h('ul', { class: 'items' }, g.items.map((it) => itemRow(it, ro))) : null);
+      hits ? h('div', { class: 'group-toggle' }, h('span', null, `Nalezeno ${hits.length} z ${g.items.length}`), summary ? h('span', { class: 'muted' }, summary) : null)
+        : h('button', { class: 'group-toggle', 'aria-expanded': String(isOpen), onclick: toggle },
+          h('span', null, isOpen ? 'Sbalit' : (g.items.length > 1 ? 'Rozkliknout po kusech' : 'Rozkliknout')),
+          summary ? h('span', { class: 'muted' }, summary) : null),
+      isOpen ? h('ul', { class: 'items' }, (hits || g.items).map((it) => itemRow(it, ro))) : null);
   }
 
   function itemRow(it, ro) {
@@ -99,6 +101,30 @@ export async function render(el, ctx, { params }) {
         disabled: ro || undefined,
         onclick: () => data.edit(key, ROLE, (p, stamp) => { p.items[it.inv] = { s: cur?.s === o.s ? '' : o.s, ...stamp() }; }),
       }, o.label))));
+  }
+
+  // hledání v místnosti: název ukáže celou skupinu, číslo jen ty kusy, které sedí
+  let q = itemQuery('');
+  const searchEl = roomSearchInput((v) => { q = itemQuery(v); drawList(); });
+
+  function drawList() {
+    const ro = readOnly();
+    if (q.empty) {
+      mount(listEl, groups.map((g) => groupCard(g)));
+      mount(specialEl, specialSection(ctx, key, ROLE, part(), items, { readOnly: ro }));
+      return;
+    }
+    const cards = [];
+    for (const g of groups) {
+      if (g.items.some(q.name)) cards.push(groupCard(g));
+      else {
+        const hits = g.items.filter(q.num);
+        if (hits.length) cards.push(groupCard(g, hits));
+      }
+    }
+    const sp = special.filter((it) => q.name(it) || q.num(it));
+    mount(listEl, cards.length || sp.length ? cards : h('p', { class: 'muted empty-q' }, 'V této místnosti nic takového není. Zkus jiné slovo nebo číslo.'));
+    mount(specialEl, sp.length ? specialSection(ctx, key, ROLE, part(), sp, { readOnly: ro }) : null);
   }
 
   function draw() {
@@ -118,13 +144,17 @@ export async function render(el, ctx, { params }) {
         c.navic ? h('span', null, mark('bad'), `Navíc ${c.navic}`) : null),
       readOnlyBanner(part(), 'Lepení', () => data.edit(key, ROLE, (p, stamp) => { p.hotovo = { v: false, ...stamp() }; })),
       !ro && !c.done ? h('p', { class: 'hint' }, 'Nalep celou skupinu a ťukni na „Nalepeno vše“. Když ti štítek zbyde nebo chybí, rozklikni skupinu.') : null);
-    mount(listEl, groups.map(groupCard));
-    mount(specialEl, specialSection(ctx, key, ROLE, part(), items, { readOnly: ro }));
+    drawList();
     mount(restEl,
       navicSection(ctx, key, ROLE, part(), { readOnly: ro }),
       noteSection(ctx, key, ROLE, part(), { readOnly: ro }),
       ro ? h('a', { class: 'btn wide', href: listHref(ROLE) }, 'Další místnost')
-        : h('button', { class: 'btn primary wide xl', onclick: finish }, 'Hotovo – další místnost'));
+        : h('div', { class: 'btn-col' },
+          h('button', { class: 'btn primary wide xl', onclick: finish }, 'Hotovo – další místnost'),
+          h('a', {
+            class: 'btn ghost wide', href: listHref(ROLE),
+            onclick: () => toast('Uloženo. Rozdělanou místnost dokončíš později, Excel pro Marcelku se aktualizuje sám.'),
+          }, 'Uložit a dodělat později')));
   }
 
   async function finish() {
@@ -159,7 +189,7 @@ export async function render(el, ctx, { params }) {
     location.hash = listHref(ROLE);
   }
 
-  mount(el, headEl, listEl, specialEl, restEl);
+  mount(el, headEl, searchEl, listEl, specialEl, restEl);
   draw();
 
   const off = data.on(async (what, k) => {
@@ -167,8 +197,7 @@ export async function render(el, ctx, { params }) {
       doc = await data.room(key);
       const ae = document.activeElement;
       if (ae && ae.tagName === 'TEXTAREA') { // nerušit psaní poznámky
-        mount(listEl, groups.map(groupCard));
-        mount(specialEl, specialSection(ctx, key, ROLE, doc.lepic, items, { readOnly: readOnly() }));
+        drawList();
         return;
       }
       draw();
