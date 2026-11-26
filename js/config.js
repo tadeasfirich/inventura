@@ -32,7 +32,7 @@ export const CONFIG = {
   roleGroups: {
     spravce: ['Inventura Správci'],
     ucitel: ['Kantoři', 'Asistenti'],
-    lepic: ['Inventura Lepiči'],
+    lepic: ['Lepiči'],
   },
 
   // Pojistka: tyto účty jsou správci vždy, i kdyby je někdo vyřadil ze skupiny.
